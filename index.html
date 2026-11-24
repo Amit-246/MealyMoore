@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mealy ⇄ Moore Converter</title>
+<style>
+  :root {
+    --fg:#1b1d22; --mut:#6b7080; --line:#e3e5ea; --bg:#f5f6f8; --card:#fff;
+    --acc:#3b5bdb; --accS:#edf1ff; --hl:#e8590c; --hlS:#fff3ea; --ok:#2b8a3e; --okS:#e7f6ec; --bad:#c92a2a;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; font:14px/1.55 Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; color:var(--fg); background:var(--bg); }
+  header { background:#fff; border-bottom:1px solid var(--line); }
+  header .in { max-width:1160px; margin:0 auto; padding:18px 20px; display:flex; justify-content:space-between; align-items:center; gap:16px; flex-wrap:wrap; }
+  header h1 { font-size:20px; margin:0; letter-spacing:-.01em; }
+  header p { margin:2px 0 0; color:var(--mut); font-size:13px; }
+  main { max-width:1160px; margin:0 auto; padding:20px 20px 60px; }
+  section { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:18px 20px; margin-bottom:18px; box-shadow:0 1px 2px rgba(0,0,0,.03); }
+  h2 { font-size:16px; margin:0 0 4px; display:flex; align-items:center; gap:10px; }
+  .num { width:24px; height:24px; border-radius:50%; background:var(--acc); color:#fff; font-size:12px; display:inline-flex; align-items:center; justify-content:center; flex:none; }
+  .lead { color:var(--mut); margin:0 0 14px; font-size:13px; }
+  h3 { font-size:12px; margin:0 0 8px; color:var(--mut); font-weight:600; text-transform:uppercase; letter-spacing:.05em; }
+  h3 b { color:var(--fg); text-transform:none; letter-spacing:0; }
+  .tabs { display:inline-flex; background:var(--bg); border:1px solid var(--line); border-radius:9px; padding:3px; }
+  .tabs button { border:0; background:transparent; padding:7px 16px; cursor:pointer; font:inherit; border-radius:7px; color:var(--mut); }
+  .tabs button.on { background:#fff; color:var(--acc); font-weight:600; box-shadow:0 1px 3px rgba(0,0,0,.1); }
+  .row { display:flex; gap:12px; flex-wrap:wrap; align-items:end; margin-bottom:12px; }
+  label { display:flex; flex-direction:column; gap:3px; font-size:12px; color:var(--mut); }
+  input, select { font:inherit; padding:6px 8px; border:1px solid var(--line); border-radius:7px; background:#fff; color:var(--fg); }
+  input:focus, select:focus { outline:2px solid var(--accS); border-color:var(--acc); }
+  input.w { width:210px; }
+  td input { width:58px; text-align:center; }
+  .btn { font:inherit; padding:7px 14px; border-radius:7px; border:1px solid var(--line); background:#fff; cursor:pointer; color:var(--fg); }
+  .btn:hover:not(:disabled) { border-color:#c5c9d3; }
+  .btn.p { background:var(--acc); color:#fff; border-color:var(--acc); }
+  .btn:disabled { opacity:.4; cursor:default; }
+  table { border-collapse:collapse; font-size:13px; }
+  th, td { border:1px solid var(--line); padding:6px 12px; text-align:center; }
+  th { background:#f7f8fa; font-weight:600; }
+  tr.hlrow td { background:var(--hlS); }
+  tr.cur td { background:var(--okS); }
+  .mut { color:#b0b4bf; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:18px; }
+  .grid3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:14px; }
+  @media (max-width:860px) { .grid2, .grid3 { grid-template-columns:1fr; } }
+  .box { overflow:auto; }
+  .panel { border:1px solid var(--line); border-radius:10px; padding:12px; background:#fcfcfd; }
+  svg { width:100%; height:auto; display:block; }
+  .err { color:var(--bad); font-size:13px; min-height:1.2em; }
+  .chips { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px; }
+  .chip { font-size:12px; padding:3px 10px; border-radius:99px; background:var(--accS); color:var(--acc); }
+  .chip.o { background:var(--hlS); color:var(--hl); }
+  .chip.g { background:var(--okS); color:var(--ok); }
+  .concept { font-size:13px; }
+  .concept h4 { margin:0 0 6px; font-size:14px; }
+  .concept p { margin:4px 0; }
+  .concept code, .step code { background:#f1f2f5; padding:1px 5px; border-radius:4px; font-size:12px; }
+  .step { background:var(--hlS); border:1px solid #ffd8bf; padding:12px 16px; border-radius:10px; min-height:96px; margin-bottom:14px; }
+  .step ul { margin:6px 0 0; padding-left:18px; }
+  .nav { display:flex; align-items:center; gap:10px; margin-bottom:12px; flex-wrap:wrap; }
+  .nav .count { color:var(--mut); font-size:13px; }
+  .dots { display:flex; gap:4px; }
+  .dots i { width:8px; height:8px; border-radius:50%; background:var(--line); cursor:pointer; }
+  .dots i.on { background:var(--hl); }
+  .note { color:var(--mut); font-size:12px; margin-top:6px; }
+  .legend { display:flex; gap:14px; font-size:12px; color:var(--mut); margin-top:8px; flex-wrap:wrap; }
+  .legend span::before { content:""; display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:5px; vertical-align:-1px; border:2px solid; }
+  .lg-h::before { border-color:var(--hl) !important; background:var(--hlS); }
+  .lg-a::before { border-color:var(--ok) !important; background:var(--okS); }
+  /* tapes */
+  .tapes { display:flex; flex-direction:column; gap:8px; margin:6px 0 12px; }
+  .tape { display:flex; align-items:center; gap:10px; }
+  .tl { width:120px; font-size:12px; color:var(--mut); flex:none; }
+  .cells { display:flex; gap:3px; flex-wrap:wrap; }
+  .c { min-width:30px; height:30px; padding:0 6px; border:1px solid var(--line); border-radius:6px; display:inline-flex; align-items:center; justify-content:center; font-size:13px; background:#fff; transition:all .2s; }
+  .c.done { background:#f1f2f5; color:var(--mut); }
+  .c.cur { border-color:var(--ok); background:var(--okS); color:var(--ok); font-weight:700; transform:translateY(-2px); }
+  .c.init { border-style:dashed; color:var(--mut); }
+  .c.new { border-color:var(--ok); color:var(--ok); font-weight:700; }
+  .status { padding:10px 14px; border-radius:10px; background:var(--okS); border:1px solid #c3e6cd; margin-bottom:14px; font-size:13px; min-height:44px; }
+  .status.bad { background:#fff0f0; border-color:#f5c2c2; }
+  /* svg */
+  .n circle { fill:#fff; stroke:#5c6070; stroke-width:1.6; transition:all .25s; }
+  .n text { font-size:13px; text-anchor:middle; fill:var(--fg); }
+  .n line { stroke:#c3c6cf; }
+  .e path { fill:none; stroke:#8a8f9c; stroke-width:1.4; }
+  .e text { font-size:12px; text-anchor:middle; fill:#3a3d45; paint-order:stroke; stroke:#fff; stroke-width:4px; stroke-linejoin:round; }
+  .hl circle { stroke:var(--hl); stroke-width:2.6; fill:var(--hlS); }
+  .e.hl path { stroke:var(--hl); stroke-width:2.4; }
+  .e.hl text { fill:var(--hl); font-weight:600; }
+  .act circle { stroke:var(--ok); stroke-width:3; fill:var(--okS); }
+  .e.act path { stroke:var(--ok); stroke-width:2.6; stroke-dasharray:7 5; animation:flow .7s linear infinite; }
+  .e.act text { fill:var(--ok); font-weight:700; }
+  @keyframes flow { to { stroke-dashoffset:-24; } }
+  .dim { opacity:.25; }
+  .start { stroke:#5c6070; stroke-width:1.4; }
+</style>
+</head>
+<body>
+<header><div class="in">
+  <div><h1>Mealy ⇄ Moore Converter</h1><p>Define a machine, convert it, follow each conversion step, then run both machines on the same input.</p></div>
+  <div class="tabs"><button id="tMealy" class="on">Mealy → Moore</button><button id="tMoore">Moore → Mealy</button></div>
+</div></header>
+
+<main>
+  <section>
+    <h2><span class="num">1</span>Concepts</h2>
+    <p class="lead">Both are finite-state machines with output, written as <code>(Q, Σ, Δ, δ, λ, q₀)</code>. They differ only in where the output comes from.</p>
+    <div class="grid3">
+      <div class="panel concept"><h4>Mealy machine</h4>
+        <p>Output depends on the <b>state and the input</b>: <code>λ : Q × Σ → Δ</code>.</p>
+        <p>The output is written on the transition, as <code>a / z</code>.</p>
+        <p>Input of length <i>n</i> gives output of length <i>n</i>.</p></div>
+      <div class="panel concept"><h4>Moore machine</h4>
+        <p>Output depends on the <b>state only</b>: <code>λ : Q → Δ</code>.</p>
+        <p>The output is written inside the state, as <code>q / z</code>.</p>
+        <p>Input of length <i>n</i> gives output of length <i>n + 1</i>, because the start state emits an output before any input is read.</p></div>
+      <div class="panel concept"><h4>Conversion rules</h4>
+        <p><b>Mealy → Moore:</b> split every state that is entered with different outputs into one copy per output. The result has at most <code>|Q| · |Δ|</code> states.</p>
+        <p><b>Moore → Mealy:</b> keep the same states and set <code>λ′(q, a) = λ(δ(q, a))</code>, so each transition carries the output of the state it enters.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="num">2</span><span id="defTitle">Define Mealy machine</span></h2>
+    <p class="lead">Edit the states and inputs (press Enter or click away to apply), fill in the table, then press <b>Convert</b>.</p>
+    <div class="row">
+      <label>States (comma separated)<input id="states" class="w"></label>
+      <label>Inputs (comma separated)<input id="inputs" class="w"></label>
+      <label>Start state<select id="start"></select></label>
+      <button class="btn" id="example">Load example</button>
+      <button class="btn p" id="convert">Convert</button>
+    </div>
+    <div class="box" id="editor"></div>
+    <div class="err" id="err"></div>
+  </section>
+
+  <section>
+    <h2><span class="num">3</span>Transition Tables</h2>
+    <p class="lead">The original machine and the converted machine. → marks the start state; a subscript marks a copy made by splitting a state.</p>
+    <div class="chips" id="chips"></div>
+    <div class="grid2">
+      <div class="box"><h3 id="lblO1">Original</h3><div id="tblO"></div></div>
+      <div class="box"><h3 id="lblC1">Converted</h3><div id="tblC"></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="num">4</span>Original Machine → Converted Machine</h2>
+    <p class="lead" id="diagLead"></p>
+    <div class="grid2">
+      <div class="panel"><h3 id="lblO2">Original</h3><svg id="svgO"></svg></div>
+      <div class="panel"><h3 id="lblC2">Converted</h3><svg id="svgC"></svg></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="num">5</span>Guided Conversion Walkthrough</h2>
+    <p class="lead">Go through the conversion one step at a time. Orange marks what the current step uses in the original machine and what it adds to the converted one.</p>
+    <div class="nav">
+      <button class="btn" id="prev">← Prev</button>
+      <button class="btn p" id="next">Next →</button>
+      <span class="count" id="stepNo"></span>
+      <div class="dots" id="dots"></div>
+    </div>
+    <div class="step" id="stepTxt"></div>
+    <div class="grid2">
+      <div class="panel"><h3 id="lblO3">Original</h3><svg id="svgWO"></svg></div>
+      <div class="panel"><h3 id="lblC3">Converted (building)</h3><svg id="svgWC"></svg></div>
+    </div>
+    <div class="box" style="margin-top:14px"><h3>Converted table so far</h3><div id="tblW"></div></div>
+  </section>
+
+  <section>
+    <h2><span class="num">6</span>Simulation</h2>
+    <p class="lead">Run the same input string through both machines. Green marks the current state and the transition just taken. If the conversion is correct, both machines produce the same output (the Moore machine's first output is ignored).</p>
+    <div class="row">
+      <label>Input string<input id="word" class="w" placeholder="e.g. 0110 or a b b a"></label>
+      <button class="btn" id="rand">Random</button>
+      <button class="btn" id="sReset">⟲ Reset</button>
+      <button class="btn" id="sStep">Step ›</button>
+      <button class="btn p" id="sPlay">▶ Play</button>
+      <button class="btn" id="sEnd">Run all ⏭</button>
+      <label>Delay <input type="range" id="speed" min="200" max="1600" step="100" value="800"></label>
+    </div>
+    <div class="err" id="serr"></div>
+    <div class="tapes">
+      <div class="tape"><span class="tl">Input</span><div class="cells" id="tapeIn"></div></div>
+      <div class="tape"><span class="tl" id="tlO">Original output</span><div class="cells" id="tapeO"></div></div>
+      <div class="tape"><span class="tl" id="tlC">Converted output</span><div class="cells" id="tapeC"></div></div>
+    </div>
+    <div class="status" id="simStatus"></div>
+    <div class="grid2">
+      <div class="panel"><h3 id="lblSO">Original</h3><svg id="svgSO"></svg></div>
+      <div class="panel"><h3 id="lblSC">Converted</h3><svg id="svgSC"></svg></div>
+    </div>
+    <div class="legend"><span class="lg-a">current state / last transition</span></div>
+    <div class="box" style="margin-top:14px"><h3>Execution trace</h3><div id="trace"></div></div>
+  </section>
+</main>
+
+<script>
+const $ = s => document.querySelector(s);
+const clone = o => JSON.parse(JSON.stringify(o));
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+const EX = {
+  mealy: { kind:'mealy', states:['q1','q2','q3'], inputs:['0','1'], start:'q1',
+    delta:{ q1:{0:'q3',1:'q2'}, q2:{0:'q1',1:'q3'}, q3:{0:'q2',1:'q1'} },
+    out:  { q1:{0:'0',1:'0'},   q2:{0:'1',1:'1'},   q3:{0:'1',1:'1'} } },
+  moore: { kind:'moore', states:['q0','q1','q2'], inputs:['a','b'], start:'q0',
+    delta:{ q0:{a:'q1',b:'q2'}, q1:{a:'q2',b:'q0'}, q2:{a:'q2',b:'q1'} },
+    out:  { q0:'0', q1:'1', q2:'0' } }
+};
+
+let mode = 'mealy', M, SRC, R, steps = [], si = 0;
+const KN = k => k === 'mealy' ? 'Mealy' : 'Moore';
+
+/* ---------- labels ---------- */
+function lab(m, id) { return (m.label && m.label[id]) || { base:id, sub:'' }; }
+function nmH(m, id) { const l = lab(m, id); return esc(l.base) + (l.sub !== '' ? `<sub>${esc(l.sub)}</sub>` : ''); }
+function nmS(m, id) { const l = lab(m, id); return esc(l.base) + (l.sub !== '' ? `<tspan dy="4" font-size="9">${esc(l.sub)}</tspan>` : ''); }
+
+/* ---------- editor ---------- */
+const parse = s => [...new Set(s.split(',').map(x => x.trim()).filter(Boolean))];
+
+function renderEditor() {
+  $('#defTitle').textContent = `Define ${KN(mode)} machine`;
+  $('#states').value = M.states.join(', ');
+  $('#inputs').value = M.inputs.join(', ');
+  $('#start').innerHTML = M.states.map(q => `<option ${q === M.start ? 'selected' : ''}>${esc(q)}</option>`).join('');
+  const sel = (q, a) => `<select data-q="${esc(q)}" data-a="${esc(a)}" data-k="d"><option value=""></option>` +
+    M.states.map(p => `<option ${M.delta[q][a] === p ? 'selected' : ''}>${esc(p)}</option>`).join('') + '</select>';
+  let h = '<table><thead>';
+  if (mode === 'mealy') {
+    h += '<tr><th rowspan="2">State</th>' + M.inputs.map(a => `<th colspan="2">Input ${esc(a)}</th>`).join('') + '</tr><tr>' +
+         M.inputs.map(() => '<th>Next</th><th>Output</th>').join('') + '</tr></thead><tbody>';
+    M.states.forEach(q => {
+      h += `<tr><td><b>${esc(q)}</b></td>` + M.inputs.map(a =>
+        `<td>${sel(q, a)}</td><td><input data-q="${esc(q)}" data-a="${esc(a)}" data-k="o" value="${esc(M.out[q][a] ?? '')}"></td>`).join('') + '</tr>';
+    });
+  } else {
+    h += '<tr><th rowspan="2">State</th><th colspan="' + M.inputs.length + '">Next state</th><th rowspan="2">Output</th></tr><tr>' +
+         M.inputs.map(a => `<th>Input ${esc(a)}</th>`).join('') + '</tr></thead><tbody>';
+    M.states.forEach(q => {
+      h += `<tr><td><b>${esc(q)}</b></td>` + M.inputs.map(a => `<td>${sel(q, a)}</td>`).join('') +
+           `<td><input data-q="${esc(q)}" data-k="o" value="${esc(M.out[q] ?? '')}"></td></tr>`;
+    });
+  }
+  $('#editor').innerHTML = h + '</tbody></table>';
+}
+
+function reshape() {
+  const S = parse($('#states').value), I = parse($('#inputs').value);
+  const d = {}, o = {};
+  S.forEach(q => {
+    d[q] = {}; o[q] = mode === 'mealy' ? {} : (M.out[q] ?? '');
+    I.forEach(a => {
+      const p = M.delta[q] && M.delta[q][a];
+      d[q][a] = S.includes(p) ? p : '';
+      if (mode === 'mealy') o[q][a] = (M.out[q] && M.out[q][a]) ?? '';
+    });
+  });
+  M = { kind:mode, states:S, inputs:I, start:S.includes(M.start) ? M.start : S[0], delta:d, out:o };
+  renderEditor();
+}
+
+$('#states').addEventListener('change', reshape);
+$('#inputs').addEventListener('change', reshape);
+$('#start').addEventListener('change', e => M.start = e.target.value);
+$('#editor').addEventListener('input', e => {
+  const t = e.target, q = t.dataset.q, a = t.dataset.a;
+  if (t.dataset.k === 'd') M.delta[q][a] = t.value;
+  else if (mode === 'mealy') M.out[q][a] = t.value.trim();
+  else M.out[q] = t.value.trim();
+});
+
+function validate() {
+  if (!M.states.length) return 'Add at least one state.';
+  if (!M.inputs.length) return 'Add at least one input symbol.';
+  for (const q of M.states) {
+    if (mode === 'moore' && !M.out[q]) return `The output of state ${q} is empty.`;
+    for (const a of M.inputs) {
+      if (!M.delta[q][a]) return `The next state for (${q}, ${a}) is empty.`;
+      if (mode === 'mealy' && !M.out[q][a]) return `The output for (${q}, ${a}) is empty.`;
+    }
+  }
+  return '';
+}
+
+/* ---------- conversions ---------- */
+function mealyToMoore(M) {
+  const inc = {}; M.states.forEach(q => inc[q] = []);
+  M.states.forEach(p => M.inputs.forEach(a => inc[M.delta[p][a]].push({ from:p, a, z:M.out[p][a] })));
+  const copies = {};
+  M.states.forEach(q => { const z = [...new Set(inc[q].map(e => e.z))]; copies[q] = z.length ? z : ['ε']; });
+  const id = (q, z) => copies[q].length > 1 ? `${q}_${z}` : q;
+  const T = { kind:'moore', states:[], inputs:M.inputs, label:{}, delta:{}, out:{} };
+  M.states.forEach(q => copies[q].forEach(z => {
+    const s = id(q, z); T.states.push(s); T.out[s] = z;
+    T.label[s] = { base:q, sub: copies[q].length > 1 ? z : '' };
+  }));
+  M.states.forEach(q => copies[q].forEach(z => {
+    const s = id(q, z); T.delta[s] = {};
+    M.inputs.forEach(a => T.delta[s][a] = id(M.delta[q][a], M.out[q][a]));
+  }));
+  T.start = id(M.start, copies[M.start][0]);
+  T.meta = { split:M.states.filter(q => copies[q].length > 1), eps:M.states.filter(q => copies[q][0] === 'ε') };
+
+  const st = [], all = new Set(T.states), vs = new Set(), ve = new Set(), filled = new Set();
+  st.push({ ph:'Overview', t:`<b>Why states must be split:</b> a Moore state has <i>one</i> fixed output. In a Mealy machine, two transitions can enter the same state with different outputs, e.g. <code>p —a/0→ q</code> and <code>r —b/1→ q</code>. A single Moore state <code>q</code> cannot output both 0 and 1, so <code>q</code> becomes two states, <code>q₀</code> (output 0) and <code>q₁</code> (output 1).<br><br>
+    <b>Plan:</b> (1) for each state, collect the outputs on its incoming transitions and split it if needed; (2) give every copy the original state's transitions, redirected to the right copy of each target; (3) choose the start state.`,
+    o:{}, c:{ vs:new Set(), ve:new Set(), rows:new Set(), filled:new Set() } });
+  M.states.forEach(q => {
+    const ins = inc[q], cs = copies[q], ids = cs.map(z => id(q, z));
+    ids.forEach(s => vs.add(s));
+    const list = ins.length ? '<ul>' + ins.map(e => `<li><code>${esc(e.from)} —${esc(e.a)}/${esc(e.z)}→ ${esc(q)}</code> enters with output <b>${esc(e.z)}</b></li>`).join('') + '</ul>' : '';
+    let t = `<b>Incoming transitions of ${esc(q)}</b>${list}<br>`;
+    if (!ins.length) t = `<b>State ${esc(q)}</b> has no incoming transitions, so no output is forced on it. Keep it as one Moore state with a don't-care output <b>ε</b>.`;
+    else if (cs.length === 1) t += `All of them output <b>${esc(cs[0])}</b>. ${esc(q)} stays <b>one</b> Moore state with output <b>${esc(cs[0])}</b>.`;
+    else t += `The outputs differ: {${cs.map(esc).join(', ')}}. Split ${esc(q)} into <b>${ids.map(s => nmH(T, s)).join(', ')}</b>; each copy outputs the value in its subscript.`;
+    st.push({ ph:'Phase 1 · Split states', t, o:{ hs:new Set([q]), he:new Set(ins.map(e => e.from + '|' + e.a)), focus:true },
+              c:{ vs:new Set(vs), ve:new Set(), hs:new Set(ids), focus:true, rows:new Set(vs), filled:new Set(), hl:new Set(ids) } });
+  });
+  M.states.forEach(q => {
+    const ids = copies[q].map(z => id(q, z)), ne = [];
+    ids.forEach(s => { filled.add(s); M.inputs.forEach(a => { ve.add(s + '|' + a); ne.push(s + '|' + a); }); });
+    const rows = M.inputs.map(a => {
+      const p = M.delta[q][a], z = M.out[q][a];
+      return `<li>On <b>${esc(a)}</b>, ${esc(q)} goes to ${esc(p)} and outputs <b>${esc(z)}</b>, so it now goes to <b>${nmH(T, id(p, z))}</b>, the copy of ${esc(p)} that outputs ${esc(z)}.</li>`;
+    }).join('');
+    st.push({ ph:'Phase 2 · Rewire transitions', t:`<b>Transitions of ${ids.map(s => nmH(T, s)).join(', ')}</b>. ${ids.length > 1 ? 'All copies' : 'This state'} behave${ids.length > 1 ? '' : 's'} like ${esc(q)} on every input. Only the target changes: the transition goes to the copy of the target state that carries the transition's output.<ul>${rows}</ul>`,
+      o:{ hs:new Set([q]), he:new Set(M.inputs.map(a => q + '|' + a)), focus:true },
+      c:{ vs:all, ve:new Set(ve), he:new Set(ne), hs:new Set(ids), focus:true, rows:all, filled:new Set(filled), hl:new Set(ids) } });
+  });
+  st.push({ ph:'Phase 3 · Start state', t:`<b>Start state: ${nmH(T, T.start)}</b>, a copy of the original start state ${esc(M.start)}.<br>A Moore machine outputs <b>${esc(T.out[T.start])}</b> before it reads any input. The Mealy machine has no such output, so drop this first output when comparing the two machines.`,
+    o:{ hs:new Set([M.start]), focus:true }, c:{ vs:all, ve:new Set(ve), hs:new Set([T.start]), focus:true, hl:new Set([T.start]) } });
+  st.push({ ph:'Result', t:`<b>Conversion complete.</b> The ${M.states.length}-state Mealy machine became a <b>${T.states.length}-state Moore machine</b>.
+    ${T.meta.split.length ? `Split states: ${T.meta.split.map(esc).join(', ')}.` : 'No state needed splitting.'}<br>
+    For any input string, the two machines produce the same output sequence once the Moore machine's first output is dropped. Section 6 checks this on an input string.`, o:{}, c:{} });
+  return { T, steps:st };
+}
+
+function mooreToMealy(M) {
+  const T = { kind:'mealy', states:[...M.states], inputs:M.inputs, start:M.start, delta:clone(M.delta), out:{} };
+  M.states.forEach(q => { T.out[q] = {}; M.inputs.forEach(a => T.out[q][a] = M.out[M.delta[q][a]]); });
+  T.meta = {};
+  const st = [], all = new Set(T.states), ve = new Set(), filled = new Set();
+  st.push({ ph:'Overview', t:`<b>Idea:</b> in a Moore machine, the output appears when a state is <i>entered</i>. In a Mealy machine, the output is produced by the transition itself. So each transition takes the output of the state it leads to:<br><code>λ′(q, a) = λ(δ(q, a))</code><br><br>The states and transitions stay the same; only the outputs move from states onto transitions.`,
+    o:{}, c:{ vs:all, ve:new Set(), rows:all, filled:new Set() } });
+  M.states.forEach(q => {
+    const ne = M.inputs.map(a => q + '|' + a); ne.forEach(k => ve.add(k)); filled.add(q);
+    const rows = M.inputs.map(a => {
+      const p = M.delta[q][a];
+      return `<li>On <b>${esc(a)}</b>, ${esc(q)} goes to ${esc(p)}, and λ(${esc(p)}) = <b>${esc(M.out[p])}</b>, giving <code>${esc(q)} —${esc(a)}/${esc(M.out[p])}→ ${esc(p)}</code></li>`;
+    }).join('');
+    st.push({ ph:'Label transitions', t:`<b>Outgoing transitions of ${esc(q)}</b>. Find each target state's output in the original machine and write it on the transition.<ul>${rows}</ul>`,
+      o:{ hs:new Set(M.inputs.map(a => M.delta[q][a])), he:new Set(ne), focus:true },
+      c:{ vs:all, ve:new Set(ve), he:new Set(ne), hs:new Set([q]), focus:true, rows:all, filled:new Set(filled), hl:new Set([q]) } });
+  });
+  st.push({ ph:'Result', t:`<b>Conversion complete.</b> The Mealy machine has the same <b>${T.states.length} states</b> and ${T.states.length * T.inputs.length} labelled transitions.<br>
+    Its output equals the Moore output without the initial output λ(${esc(M.start)}) = ${esc(M.out[M.start])}. Section 6 checks this on an input string.`, o:{}, c:{} });
+  return { T, steps:st };
+}
+
+/* ---------- tables ---------- */
+function table(m, o = {}) {
+  const rows = o.rows ? m.states.filter(q => o.rows.has(q)) : m.states;
+  if (!rows.length) return '<div class="note">No states yet. Step forward to build the table.</div>';
+  const f = q => !o.filled || o.filled.has(q), hl = o.hl || new Set(), dash = '<span class="mut">–</span>';
+  const st = q => (q === m.start ? '→ ' : '') + '<b>' + nmH(m, q) + '</b>';
+  let h = '<table><thead>';
+  if (m.kind === 'mealy') {
+    h += '<tr><th rowspan="2">State</th>' + m.inputs.map(a => `<th colspan="2">Input ${esc(a)}</th>`).join('') + '</tr><tr>' +
+         m.inputs.map(() => '<th>Next</th><th>Output</th>').join('') + '</tr></thead><tbody>';
+    rows.forEach(q => h += `<tr class="${hl.has(q) ? 'hlrow' : ''}"><td>${st(q)}</td>` +
+      m.inputs.map(a => f(q) ? `<td>${nmH(m, m.delta[q][a])}</td><td>${esc(m.out[q][a])}</td>` : `<td>${nmH(m, m.delta[q][a])}</td><td>${dash}</td>`).join('') + '</tr>');
+  } else {
+    h += '<tr><th rowspan="2">State</th><th colspan="' + m.inputs.length + '">Next state</th><th rowspan="2">Output λ</th></tr><tr>' +
+         m.inputs.map(a => `<th>Input ${esc(a)}</th>`).join('') + '</tr></thead><tbody>';
+    rows.forEach(q => h += `<tr class="${hl.has(q) ? 'hlrow' : ''}"><td>${st(q)}</td>` +
+      m.inputs.map(a => `<td>${f(q) ? nmH(m, m.delta[q][a]) : dash}</td>`).join('') + `<td><b>${esc(m.out[q])}</b></td></tr>`);
+  }
+  return h + '</tbody></table>';
+}
+
+/* ---------- diagram ---------- */
+function draw(svg, m, o = {}) {
+  const hs = o.hs || new Set(), he = o.he || new Set(), vs = o.vs, ve = o.ve, focus = o.focus, tone = o.tone || 'hl';
+  const n = m.states.length, order = [m.start, ...m.states.filter(s => s !== m.start)];
+  const r = m.kind === 'moore' ? 26 : 22, Rad = n === 1 ? 0 : Math.max(95, n * 27);
+  const W = 2 * Rad + 220, H = 2 * Rad + 170, cx = W / 2 + 15, cy = H / 2;
+  const P = {};
+  order.forEach((s, i) => { const t = Math.PI + 2 * Math.PI * i / n; P[s] = { x:cx + Rad * Math.cos(t), y:cy + Rad * Math.sin(t), t }; });
+  const cls = (base, on) => base + (on ? ' ' + tone : (focus ? ' dim' : ''));
+
+  const groups = new Map();
+  m.states.forEach(q => m.inputs.forEach(a => {
+    const k = q + '|' + a, to = m.delta[q][a];
+    if (ve && !ve.has(k)) return;
+    if (vs && (!vs.has(q) || !vs.has(to))) return;
+    const g = q + '>' + to;
+    if (!groups.has(g)) groups.set(g, { from:q, to, items:[] });
+    groups.get(g).items.push({ k, a, z: m.kind === 'mealy' ? m.out[q][a] : null });
+  }));
+
+  let E = '', EH = '';
+  groups.forEach(g => {
+    const on = g.items.some(i => he.has(i.k));
+    const txt = esc(g.items.map(i => i.z !== null ? `${i.a}/${i.z}` : i.a).join(', '));
+    const A = P[g.from], B = P[g.to], mk = on ? `url(#m-${tone})` : 'url(#m-n)';
+    let d, lx, ly;
+    if (g.from === g.to) {
+      const f = n === 1 ? -Math.PI / 2 : (g.from === m.start ? -2.1 : A.t);
+      const pt = (ang, rr) => [A.x + rr * Math.cos(ang), A.y + rr * Math.sin(ang)];
+      const [x1, y1] = pt(f - .45, r), [x2, y2] = pt(f + .45, r), [c1x, c1y] = pt(f - .7, r + 55), [c2x, c2y] = pt(f + .7, r + 55);
+      d = `M${x1},${y1} C${c1x},${c1y} ${c2x},${c2y} ${x2},${y2}`;
+      [lx, ly] = pt(f, r + 52);
+    } else {
+      const dx = B.x - A.x, dy = B.y - A.y, L = Math.hypot(dx, dy), nx = -dy / L, ny = dx / L;
+      const off = groups.has(g.to + '>' + g.from) ? 30 : 12;
+      const Cx = (A.x + B.x) / 2 + nx * off, Cy = (A.y + B.y) / 2 + ny * off;
+      const u = (X, Y) => { const l = Math.hypot(Cx - X, Cy - Y); return [X + (Cx - X) / l * r, Y + (Cy - Y) / l * r]; };
+      const [sx, sy] = u(A.x, A.y), [ex, ey] = u(B.x, B.y);
+      d = `M${sx},${sy} Q${Cx},${Cy} ${ex},${ey}`;
+      lx = .25 * sx + .5 * Cx + .25 * ex + nx * 9; ly = .25 * sy + .5 * Cy + .25 * ey + ny * 9 + 4;
+    }
+    const g2 = `<g class="${cls('e', on)}"><path d="${d}" marker-end="${mk}"/><text x="${lx}" y="${ly}">${txt}</text></g>`;
+    if (on) EH += g2; else E += g2;   // highlighted edges drawn on top
+  });
+
+  let N = '';
+  m.states.forEach(q => {
+    if (vs && !vs.has(q)) return;
+    const { x, y } = P[q], on = hs.has(q);
+    const inner = m.kind === 'moore'
+      ? `<text x="${x}" y="${y - 5}">${nmS(m, q)}</text><line x1="${x - r + 5}" y1="${y + 2}" x2="${x + r - 5}" y2="${y + 2}"/><text x="${x}" y="${y + 17}" font-size="12" font-weight="600">${esc(m.out[q])}</text>`
+      : `<text x="${x}" y="${y + 4}">${nmS(m, q)}</text>`;
+    const sa = q === m.start ? `<line class="start" x1="${x - r - 34}" y1="${y}" x2="${x - r}" y2="${y}" marker-end="url(#m-n)"/>` : '';
+    N += `<g class="${cls('n', on)}">${sa}<circle cx="${x}" cy="${y}" r="${r}"/>${inner}</g>`;
+  });
+
+  const mark = (id, c) => `<marker id="${id}" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z" fill="${c}"/></marker>`;
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.innerHTML = `<defs>${mark('m-n', '#8a8f9c')}${mark('m-hl', '#e8590c')}${mark('m-act', '#2b8a3e')}</defs>${E}${EH}${N}`;
+}
+
+/* ---------- convert & render ---------- */
+function convert() {
+  const e = validate(); $('#err').textContent = e;
+  if (e) return;
+  SRC = clone(M);
+  ({ T:R, steps } = mode === 'mealy' ? mealyToMoore(SRC) : mooreToMealy(SRC));
+  const on = KN(SRC.kind), cn = KN(R.kind);
+  ['#lblO1', '#lblO2', '#lblO3'].forEach(s => $(s).textContent = `Original · ${on}`);
+  ['#lblC1', '#lblC2'].forEach(s => $(s).textContent = `Converted · ${cn}`);
+  $('#lblC3').textContent = `Converted · ${cn} (building)`;
+  $('#tlO').textContent = `${on} output`; $('#tlC').textContent = `${cn} output`;
+
+  const chips = [`<span class="chip">${SRC.states.length} states → ${R.states.length} states</span>`,
+                 `<span class="chip">${SRC.inputs.length} input symbols</span>`];
+  if (R.meta.split) chips.push(R.meta.split.length ? `<span class="chip o">Split: ${R.meta.split.map(esc).join(', ')}</span>` : `<span class="chip g">No splitting needed</span>`);
+  if (R.meta.eps && R.meta.eps.length) chips.push(`<span class="chip o">ε output (no incoming transitions): ${R.meta.eps.map(esc).join(', ')}</span>`);
+  if (SRC.kind === 'moore') chips.push(`<span class="chip g">Same states, outputs moved onto transitions</span>`);
+  $('#chips').innerHTML = chips.join('');
+  $('#diagLead').innerHTML = SRC.kind === 'mealy'
+    ? 'Mealy transitions are labelled <code>input/output</code>. Each Moore state shows its name on top and its output below the line.'
+    : 'Each Moore state shows its name on top and its output below the line. Mealy transitions are labelled <code>input/output</code>.';
+
+  $('#tblO').innerHTML = table(SRC);
+  $('#tblC').innerHTML = table(R);
+  draw($('#svgO'), SRC); draw($('#svgC'), R);
+  $('#dots').innerHTML = steps.map((_, i) => `<i data-i="${i}" title="Step ${i + 1}"></i>`).join('');
+  si = 0; showStep();
+  simInit();
+}
+
+function showStep() {
+  const s = steps[si];
+  $('#stepTxt').innerHTML = `<span class="chip o" style="margin-bottom:8px;display:inline-block">${s.ph}</span><br>` + s.t;
+  $('#stepNo').textContent = `Step ${si + 1} of ${steps.length}`;
+  $('#prev').disabled = si === 0; $('#next').disabled = si === steps.length - 1;
+  [...$('#dots').children].forEach((d, i) => d.classList.toggle('on', i <= si));
+  draw($('#svgWO'), SRC, s.o);
+  draw($('#svgWC'), R, s.c);
+  $('#tblW').innerHTML = table(R, s.c);
+}
+
+/* ---------- simulation ---------- */
+let sim = { w:[], i:0, timer:null };
+
+function tokenize(str, inputs) {
+  str = str.trim(); if (!str) return [];
+  const toks = /[\s,]/.test(str) || inputs.some(a => a.length > 1) ? str.split(/[\s,]+/).filter(Boolean) : [...str];
+  const bad = toks.find(t => !inputs.includes(t));
+  if (bad !== undefined) throw new Error(`"${bad}" is not an input symbol. Allowed symbols: ${inputs.join(', ')}`);
+  return toks;
+}
+function run(m, w) {
+  const st = [m.start], out = [];
+  w.forEach(a => { const q = st[st.length - 1], p = m.delta[q][a]; out.push(m.kind === 'mealy' ? m.out[q][a] : m.out[p]); st.push(p); });
+  return { st, out, init: m.kind === 'moore' ? m.out[m.start] : null };
+}
+function defaultWord(I) { return [0, 1, 1, 0, 1, 0, 0, 1].map(k => I[k % I.length]).join(I.some(a => a.length > 1) ? ' ' : ''); }
+
+function simInit() {
+  simStop();
+  let w;
+  try { w = tokenize($('#word').value, SRC.inputs); if (!w.length) throw 0; }
+  catch { $('#word').value = defaultWord(SRC.inputs); w = tokenize($('#word').value, SRC.inputs); }
+  sim.w = w; sim.i = 0; $('#serr').textContent = ''; simRender();
+}
+function simLoad() {
+  simStop();
+  try { sim.w = tokenize($('#word').value, SRC.inputs); sim.i = 0; $('#serr').textContent = ''; simRender(); }
+  catch (e) { $('#serr').textContent = e.message; }
+}
+
+function outCells(m, t, i) {
+  let h = m.kind === 'moore' ? `<span class="c init" title="Initial output λ(q₀); not counted when comparing">${esc(t.init)}</span>` : '';
+  return h + t.out.map((z, j) => `<span class="c ${j < i - 1 ? 'done' : ''} ${j === i - 1 ? 'new' : ''}">${j < i ? esc(z) : ''}</span>`).join('');
+}
+
+function simRender() {
+  const { w, i } = sim, tO = run(SRC, w), tC = run(R, w), end = i === w.length;
+  $('#tapeIn').innerHTML = w.map((a, j) => `<span class="c ${j < i ? 'done' : ''} ${j === i ? 'cur' : ''}">${esc(a)}</span>`).join('') || '<span class="note">Enter an input string above.</span>';
+  $('#tapeO').innerHTML = outCells(SRC, tO, i);
+  $('#tapeC').innerHTML = outCells(R, tC, i);
+
+  const eO = i ? new Set([tO.st[i - 1] + '|' + w[i - 1]]) : new Set(), eC = i ? new Set([tC.st[i - 1] + '|' + w[i - 1]]) : new Set();
+  draw($('#svgSO'), SRC, { hs:new Set([tO.st[i]]), he:eO, tone:'act' });
+  draw($('#svgSC'), R, { hs:new Set([tC.st[i]]), he:eC, tone:'act' });
+  $('#lblSO').innerHTML = `Original · ${KN(SRC.kind)} &nbsp;·&nbsp; current state <b>${nmH(SRC, tO.st[i])}</b>`;
+  $('#lblSC').innerHTML = `Converted · ${KN(R.kind)} &nbsp;·&nbsp; current state <b>${nmH(R, tC.st[i])}</b>`;
+
+  const moore = SRC.kind === 'moore' ? SRC : R, mt = SRC.kind === 'moore' ? tO : tC;
+  const ok = tO.out.slice(0, i).every((z, j) => z === tC.out[j]);
+  const st = $('#simStatus'); st.classList.toggle('bad', !ok);
+  if (i === 0) st.innerHTML = `<b>Ready.</b> Both machines are in their start states (${nmH(SRC, SRC.start)} and ${nmH(R, R.start)}). The Moore machine has already output <b>${esc(mt.init)}</b> from its start state ${nmH(moore, moore.start)}; this output is ignored when comparing. Press <b>Step</b> or <b>Play</b>.`;
+  else {
+    const a = w[i - 1];
+    const line = (m, t) => `${nmH(m, t.st[i - 1])} —${esc(a)}→ ${nmH(m, t.st[i])}, output <b>${esc(t.out[i - 1])}</b>`;
+    st.innerHTML = `<b>Step ${i}: read “${esc(a)}”.</b> Original: ${line(SRC, tO)} &nbsp;|&nbsp; Converted: ${line(R, tC)} &nbsp; ${tO.out[i - 1] === tC.out[i - 1] ? '✓ outputs match' : '✗ outputs differ'}` +
+      (end ? `<br><b>Finished.</b> ${KN(SRC.kind)} output: <code>${tO.out.map(esc).join(' ')}</code>, ${KN(R.kind)} output: <code>${R.kind === 'moore' ? `(${esc(tC.init)}) ` : ''}${tC.out.map(esc).join(' ')}</code>. ${ok ? '✓ The machines are equivalent on this input.' : '✗ The outputs differ.'}` : '');
+  }
+
+  let h = `<table><thead><tr><th rowspan="2">#</th><th rowspan="2">Input</th><th colspan="2">Original · ${KN(SRC.kind)}</th><th colspan="2">Converted · ${KN(R.kind)}</th><th rowspan="2">Match</th></tr>
+    <tr><th>Transition</th><th>Output</th><th>Transition</th><th>Output</th></tr></thead><tbody>`;
+  h += `<tr class="${i === 0 ? 'cur' : ''}"><td>0</td><td class="mut">start</td><td>${nmH(SRC, SRC.start)}</td><td>${SRC.kind === 'moore' ? `<span class="mut">(${esc(tO.init)})</span>` : '<span class="mut">–</span>'}</td>` +
+       `<td>${nmH(R, R.start)}</td><td>${R.kind === 'moore' ? `<span class="mut">(${esc(tC.init)})</span>` : '<span class="mut">–</span>'}</td><td class="mut">–</td></tr>`;
+  for (let j = 0; j < i; j++) {
+    h += `<tr class="${j === i - 1 ? 'cur' : ''}"><td>${j + 1}</td><td><b>${esc(w[j])}</b></td>` +
+      `<td>${nmH(SRC, tO.st[j])} → ${nmH(SRC, tO.st[j + 1])}</td><td><b>${esc(tO.out[j])}</b></td>` +
+      `<td>${nmH(R, tC.st[j])} → ${nmH(R, tC.st[j + 1])}</td><td><b>${esc(tC.out[j])}</b></td>` +
+      `<td>${tO.out[j] === tC.out[j] ? '✓' : '✗'}</td></tr>`;
+  }
+  $('#trace').innerHTML = h + '</tbody></table>';
+
+  $('#sStep').disabled = $('#sEnd').disabled = end;
+  $('#sPlay').disabled = end && !sim.timer;
+  $('#sPlay').textContent = sim.timer ? '❚❚ Pause' : '▶ Play';
+}
+function simStep() { if (sim.i < sim.w.length) { sim.i++; simRender(); } if (sim.i >= sim.w.length) simStop(); }
+function simStop() { clearTimeout(sim.timer); sim.timer = null; if (SRC) simRender(); }
+function tick() { simStep(); if (sim.i < sim.w.length) sim.timer = setTimeout(tick, +$('#speed').value); }
+
+$('#sStep').onclick = () => { simStop(); simStep(); };
+$('#sEnd').onclick = () => { simStop(); sim.i = sim.w.length; simRender(); };
+$('#sReset').onclick = () => { simStop(); sim.i = 0; simRender(); };
+$('#sPlay').onclick = () => {
+  if (sim.timer) return simStop();
+  if (sim.i >= sim.w.length) sim.i = 0;
+  sim.timer = setTimeout(tick, 150); simRender();
+};
+$('#word').addEventListener('change', simLoad);
+$('#word').addEventListener('keydown', e => { if (e.key === 'Enter') simLoad(); });
+$('#rand').onclick = () => {
+  const I = SRC.inputs, n = 6 + Math.floor(Math.random() * 5);
+  $('#word').value = Array.from({ length:n }, () => I[Math.floor(Math.random() * I.length)]).join(I.some(a => a.length > 1) ? ' ' : '');
+  simLoad();
+};
+
+/* ---------- wiring ---------- */
+function setMode(m) {
+  mode = m;
+  $('#tMealy').classList.toggle('on', m === 'mealy');
+  $('#tMoore').classList.toggle('on', m === 'moore');
+  M = clone(EX[m]); $('#word').value = ''; renderEditor(); convert();
+}
+$('#tMealy').onclick = () => setMode('mealy');
+$('#tMoore').onclick = () => setMode('moore');
+$('#example').onclick = () => { M = clone(EX[mode]); renderEditor(); convert(); };
+$('#convert').onclick = convert;
+$('#prev').onclick = () => { if (si > 0) { si--; showStep(); } };
+$('#next').onclick = () => { if (si < steps.length - 1) { si++; showStep(); } };
+$('#dots').onclick = e => { if (e.target.dataset.i) { si = +e.target.dataset.i; showStep(); } };
+document.addEventListener('keydown', e => {
+  if (e.target.matches('input,select')) return;
+  if (e.key === 'ArrowRight') $('#next').click();
+  if (e.key === 'ArrowLeft') $('#prev').click();
+});
+
+setMode('mealy');
+</script>
+</body>
+</html>
