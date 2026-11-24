@@ -295,7 +295,16 @@ function mealyToMoore(M) {
   M.states.forEach(p => M.inputs.forEach(a => inc[M.delta[p][a]].push({ from:p, a, z:M.out[p][a] })));
   const copies = {};
   M.states.forEach(q => { const z = [...new Set(inc[q].map(e => e.z))]; copies[q] = z.length ? z : ['ε']; });
-  const id = (q, z) => copies[q].length > 1 ? `${q}_${z}` : q;
+  // Internal ids for split copies must never collide with an existing state name
+  // (e.g. splitting "q" into "q_0" when the machine already has a state "q_0").
+  // The visible name comes from T.label, so the id itself is never shown.
+  const taken = new Set(M.states), ids = {};
+  M.states.forEach(q => { ids[q] = {}; if (copies[q].length > 1) copies[q].forEach(z => {
+    let s = `${q}_${z}`, k = 1;
+    while (taken.has(s)) s = `${q}_${z}#${k++}`;
+    taken.add(s); ids[q][z] = s;
+  }); });
+  const id = (q, z) => copies[q].length > 1 ? ids[q][z] : q;
   const T = { kind:'moore', states:[], inputs:M.inputs, label:{}, delta:{}, out:{} };
   M.states.forEach(q => copies[q].forEach(z => {
     const s = id(q, z); T.states.push(s); T.out[s] = z;
